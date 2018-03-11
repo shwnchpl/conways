@@ -16,6 +16,7 @@ PRODUCT = conways
 vpath %.cpp $(SRCDIR)
 
 all: $(BUILDDIR) $(BUILDDIR)/$(PRODUCT)
+.PHONEY: clean
 
 $(BUILDDIR):
 	$(MKDIR_P) $(BUILDDIR)
