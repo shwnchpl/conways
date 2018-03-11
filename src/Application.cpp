@@ -1,49 +1,11 @@
 
-#include <memory>
-#include <algorithm>
+#include "Application.h"
+#include "Config.h"
 
 #include "SDL/SDL.h"
 
-#define WINDOW_TITLE            "Conway's Game of Life"
-#define SCREEN_WIDTH            800
-#define SCREEN_HEIGHT           800
-#define CELL_WIDTH              20
-#define SCREEN_BPP              32
-#define TIME_PER_GENERATION_MS  250
-
-// TODO: [ACTIVE] should display in title when game is active.
-//       Escape should quit.
-//       Command line arguments for speed and size would be nice.
-
-class Application {
-public:
-  Application(int width, int height, int cellWidth);
-  ~Application(void);
-
-  bool Init(void);
-  void Destroy(void);
-  void UpdateView(void);
-  void ToggleCell(int y, int x);
-  void Iterate(void);
-
-private:
-  void DrawGrid(void);
-  int NeighborCount(int y, int x);
-  bool GetValidStateSpaceOffset(int y, int x, int& offset);
-
-  Uint32  m_RGBBlack;
-  Uint32  m_RGBWhite;
-
-  Uint16  m_screenWidth;
-  Uint16  m_screenHeight;
-  int     m_cellWidth;
-  int     m_stateSpaceWidth;
-  int     m_stateSpaceHeight;
-
-  bool*         m_state;
-
-  SDL_Surface*  m_screen; 
-};
+#include <algorithm>
+#include <vector>
 
 Application::Application(int width, int height, int cellWidth)
   : m_screenWidth(width),
@@ -62,7 +24,6 @@ Application::~Application(void)
 
 bool Application::Init(void)
 {
-
   SDL_Init(SDL_INIT_EVERYTHING);
 
   SDL_putenv((char*)"SDL_VIDEO_WINDOW_POS=center");
@@ -203,46 +164,3 @@ void Application::Iterate(void)
   }
 }
 
-int main(void)
-{
-  SDL_Event event;
-  bool done = false, active = false;
-  auto app = std::make_unique<Application>(SCREEN_WIDTH, SCREEN_HEIGHT, CELL_WIDTH);
-
-  app->Init();
-
-  while (!done) {
-    while (SDL_PollEvent(&event)) {
-      switch (event.type) {
-        case SDL_MOUSEBUTTONDOWN:
-          if (event.button.button == SDL_BUTTON_LEFT) {
-            // XXX: This is a little ugly, but it gets the job done.
-            app->ToggleCell(event.button.y / CELL_WIDTH, event.button.x / CELL_WIDTH); 
-            app->UpdateView();
-          }
-          break;
-        case SDL_KEYDOWN:
-          if (event.key.keysym.sym == SDLK_SPACE) {
-            active = !active;
-          }
-          break;
-        case SDL_USEREVENT:
-          if (active) {
-            app->Iterate();
-            app->UpdateView();
-          }
-          break;
-        case SDL_QUIT:
-          done = true;
-          break;
-        default:
-          break;
-      }
-    }
-  }
-
-  app->Destroy();
-  app.reset(nullptr);
-
-  return 0;
-}
