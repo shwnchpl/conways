@@ -11,8 +11,9 @@
 #define SCREEN_BPP              32
 #define TIME_PER_GENERATION_MS  250
 
-// TODO: Active should display in title.
+// TODO: [ACTIVE] should display in title when game is active.
 //       Escape should quit.
+//       Command line arguments for speed and size would be nice.
 
 class Application {
 public:
@@ -27,7 +28,8 @@ public:
 
 private:
   void DrawGrid(void);
-  int  NeighborCount(int y, int x);
+  int NeighborCount(int y, int x);
+  bool GetValidStateSpaceOffset(int y, int x, int& offset);
 
   Uint32  m_RGBBlack;
   Uint32  m_RGBWhite;
@@ -79,7 +81,7 @@ bool Application::Init(void)
                               m_screenHeight,
                               SCREEN_BPP,
                               SDL_SWSURFACE);
-  if(m_screen == nullptr)
+  if (m_screen == nullptr)
     return false;
 
   m_RGBBlack = SDL_MapRGB(m_screen->format, 0x00, 0x00, 0x00);
@@ -103,8 +105,7 @@ void Application::Destroy(void)
 
 void Application::DrawGrid(void)
 {
-  // FIXME: Right now, width and height must be the same.
-  for(Sint16 i = m_cellWidth - 1; i < m_screenWidth; i += m_cellWidth) {
+  for (Sint16 i = m_cellWidth - 1; i < m_screenWidth; i += m_cellWidth) {
     SDL_Rect line = {0, i, m_screenWidth, 1};
 
     SDL_FillRect(m_screen, &line, m_RGBBlack);
@@ -123,68 +124,81 @@ void Application::UpdateView(void)
 
 void Application::ToggleCell(int y, int x)
 {
-  // FIXME: Handle out of bounds error.
-  SDL_Rect rect;
+  int cellOffset = 0;
+  if (GetValidStateSpaceOffset(y, x, cellOffset)) {
+    SDL_Rect rect;
 
-  rect.x = x * m_cellWidth;
-  rect.y = y * m_cellWidth;
-  rect.w = rect.h = m_cellWidth - 1;
+    rect.x = x * m_cellWidth;
+    rect.y = y * m_cellWidth;
+    rect.w = rect.h = m_cellWidth - 1;
 
-  int cellOffset = y * m_stateSpaceWidth + x;
-
-  SDL_FillRect(m_screen, &rect, (m_state[cellOffset] = !m_state[cellOffset]) ? m_RGBBlack : m_RGBWhite);
+    SDL_FillRect(m_screen, &rect, (m_state[cellOffset] = !m_state[cellOffset]) ? m_RGBBlack : m_RGBWhite);
+  }
 }
 
 int Application::NeighborCount(int y, int x)
 {
   int count = 0;
-  int offsetOfCell = y * m_stateSpaceWidth + x;
+  int offsetOfCell = 0;
 
-  if(x > 0) {
-    count += m_state[offsetOfCell - 1];
+  if (GetValidStateSpaceOffset(y, x, offsetOfCell)) {
+    if (x > 0) {
+      count += m_state[offsetOfCell - 1];
+      if (y > 0)
+        count += m_state[offsetOfCell - m_stateSpaceWidth - 1];
+      if (y  < (m_stateSpaceWidth - 1)) 
+        count += m_state[offsetOfCell + m_stateSpaceWidth - 1];
+    }
+
+    if (x < (m_stateSpaceWidth - 1)) {
+      count += m_state[offsetOfCell + 1];
+      if (y > 0)
+        count += m_state[offsetOfCell - m_stateSpaceWidth + 1];
+      if (y  < (m_stateSpaceWidth - 1)) 
+        count += m_state[offsetOfCell + m_stateSpaceWidth + 1];
+    }
+
     if (y > 0)
-      count += m_state[offsetOfCell - m_stateSpaceWidth - 1];
+      count += m_state[offsetOfCell - m_stateSpaceWidth];
     if (y  < (m_stateSpaceWidth - 1)) 
-      count += m_state[offsetOfCell + m_stateSpaceWidth - 1];
+      count += m_state[offsetOfCell + m_stateSpaceWidth];
   }
-
-  if(x < (m_stateSpaceWidth - 1)) {
-    count += m_state[offsetOfCell + 1];
-    if (y > 0)
-      count += m_state[offsetOfCell - m_stateSpaceWidth + 1];
-    if (y  < (m_stateSpaceWidth - 1)) 
-      count += m_state[offsetOfCell + m_stateSpaceWidth + 1];
-  }
-
-  if (y > 0)
-    count += m_state[offsetOfCell - m_stateSpaceWidth];
-  if (y  < (m_stateSpaceWidth - 1)) 
-    count += m_state[offsetOfCell + m_stateSpaceWidth];
       
   return count;
+}
+
+bool Application::GetValidStateSpaceOffset(int y, int x, int& offset)
+{
+  int cellOffset = y * m_stateSpaceWidth + x;
+  if (cellOffset < (m_stateSpaceWidth * m_stateSpaceHeight)) {
+    offset = cellOffset;
+    return true;
+  }
+
+  return false;
 }
 
 void Application::Iterate(void)
 {
   std::vector<std::pair<int, int>> cellsToToggle;
 
-  for(int y = 0; y < m_stateSpaceWidth; ++y) {
-    for(int x = 0; x < m_stateSpaceWidth; ++x) {
+  for (int y = 0; y < m_stateSpaceWidth; ++y) {
+    for (int x = 0; x < m_stateSpaceWidth; ++x) {
       int offsetOfCell = y * m_stateSpaceWidth + x;
       int neighborCount = NeighborCount(y, x);
 
       // If alive
-      if(m_state[offsetOfCell]) {
-        if(neighborCount < 2 || neighborCount > 3)
+      if (m_state[offsetOfCell]) {
+        if (neighborCount < 2 || neighborCount > 3)
           cellsToToggle.push_back(std::make_pair(y, x));
       }
-      else if(neighborCount == 3) {
+      else if (neighborCount == 3) {
         cellsToToggle.push_back(std::make_pair(y, x));
       }
     }
   }
 
-  for(auto& pair : cellsToToggle) {
+  for (auto& pair : cellsToToggle) {
     ToggleCell(pair.first, pair.second);
   }
 }
@@ -197,23 +211,23 @@ int main(void)
 
   app->Init();
 
-  while(!done) {
-    while(SDL_PollEvent(&event)) {
-      switch(event.type) {
+  while (!done) {
+    while (SDL_PollEvent(&event)) {
+      switch (event.type) {
         case SDL_MOUSEBUTTONDOWN:
-          if(event.button.button == SDL_BUTTON_LEFT) {
-            // FIXME: Whatever happened to encapsulating cell width?
+          if (event.button.button == SDL_BUTTON_LEFT) {
+            // XXX: This is a little ugly, but it gets the job done.
             app->ToggleCell(event.button.y / CELL_WIDTH, event.button.x / CELL_WIDTH); 
             app->UpdateView();
           }
           break;
         case SDL_KEYDOWN:
-          if(event.key.keysym.sym == SDLK_SPACE) {
+          if (event.key.keysym.sym == SDLK_SPACE) {
             active = !active;
           }
           break;
         case SDL_USEREVENT:
-          if(active) {
+          if (active) {
             app->Iterate();
             app->UpdateView();
           }
